@@ -217,6 +217,8 @@ timestamp,action,resource_id,resource_type,region,account_id,role_arn,verdict,re
 
 ## Use as MCP Server
 
+> **Security Note:** The MCP server exposes destructive tools (stop, delete, release) over stdio transport. It is designed for local use only — do NOT expose it over a network. The server relies on the calling client (Claude Desktop, Kiro, etc.) to handle user confirmation. When used outside the Strands agent, the double-confirmation safety gate is the client's responsibility.
+
 The agent's tools are also exposed as an MCP server, so customers can plug them into any GenAI tool that supports MCP (Claude Desktop, Kiro, Amazon Q, Cursor, etc).
 
 ### Run the MCP server
@@ -292,3 +294,4 @@ See [CONTRIBUTING](CONTRIBUTING.md) for more information.
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
+

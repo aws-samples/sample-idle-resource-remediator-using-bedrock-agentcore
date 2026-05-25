@@ -347,7 +347,7 @@ def export_idle_report(account_id: str, output_path: str = "idle-resources-repor
     results = data.get("top_20", [])  # For now use what we have; full pagination already happened inside
 
     if results:
-        with open(output_path, "w", newline="") as f:
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["resource_id", "name", "resource_type", "instance_type", "region", "created_date", "last_modified", "finding", "recommended_action", "monthly_savings", "tags", "approve"])
             writer.writeheader()
             for r in results:
@@ -717,7 +717,8 @@ def create_agent(permissions: dict):
         print(f"[GUARDRAIL] Bedrock Guardrail attached: {guardrail_id} (v{guardrail_version})")
     else:
         guardrail_id = None
-        print("[GUARDRAIL]   No Bedrock Guardrail configured. Set guardrail_id in GUARDRAILS to enable.")
+        print("[GUARDRAIL]   WARNING: No Bedrock Guardrail configured. Prompt injection protection is DISABLED.")
+        print("[GUARDRAIL]   Set guardrail_id in GUARDRAILS to enable. See README for setup instructions.")
 
     model = BedrockModel(
         model_id="us.anthropic.claude-sonnet-4-6",

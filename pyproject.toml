@@ -1,0 +1,48 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "idle-resource-remediator"
+version = "0.1.0"
+description = "AI agent that scans AWS accounts for idle resources, validates with CloudWatch metrics, and safely remediates waste"
+readme = "README.md"
+license = "MIT-0"
+requires-python = ">=3.12"
+authors = [
+    { name = "Sudeender Balaji" }
+]
+keywords = ["aws", "cost-optimization", "idle-resources", "strands-agents", "mcp", "bedrock"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+dependencies = [
+    "strands-agents>=0.0.1",
+    "strands-agents-bedrock>=0.0.1",
+    "boto3>=1.35.0",
+    "mcp[cli]>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "moto>=5.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/aws-samples/idle-resource-remediator"
+Issues = "https://github.com/aws-samples/idle-resource-remediator/issues"
+
+[project.scripts]
+idle-resource-remediator = "src.mcp_server:mcp.run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

@@ -717,7 +717,8 @@ def create_agent(permissions: dict):
         print(f"[GUARDRAIL] Bedrock Guardrail attached: {guardrail_id} (v{guardrail_version})")
     else:
         guardrail_id = None
-        print("[GUARDRAIL]   No Bedrock Guardrail configured. Set guardrail_id in GUARDRAILS to enable.")
+        print("[GUARDRAIL]   WARNING: No Bedrock Guardrail configured. Prompt injection protection is DISABLED.")
+        print("[GUARDRAIL]   Set guardrail_id in GUARDRAILS to enable. See README for setup instructions.")
 
     model = BedrockModel(
         model_id="us.anthropic.claude-sonnet-4-6",

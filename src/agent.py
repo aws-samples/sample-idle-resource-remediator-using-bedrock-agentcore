@@ -85,60 +85,74 @@ def get_active_regions() -> list:
     print(f"[REGIONS] Scanning {len(regions)} regions: {', '.join(sorted(regions))}")
     return regions
 
-# Check the permissions with dry run for terminate action (PreCheck)
+# Check permissions using SimulatePrincipalPolicy (proper IAM evaluation)
 def resolve_permissions(arn: str) -> dict:
     print(f"[AUTH] Checking permissions for: {arn}")
-    region = GUARDRAILS["allowed_regions"][0]
-    ec2 = boto3.client("ec2", region_name=region)
+
+    # Actions we need to check
+    required_actions = [
+        "ec2:StopInstances",
+        "ec2:TerminateInstances",
+        "ec2:CreateSnapshot",
+        "ec2:DeleteVolume",
+        "ec2:ReleaseAddress",
+        "ec2:DescribeInstances",
+        "ec2:DescribeVolumes",
+        "ec2:DescribeAddresses",
+        "cloudwatch:GetMetricStatistics",
+        "compute-optimizer:GetIdleRecommendations",
+    ]
+
     allowed_actions = set()
 
-    # EC2 actions — use DryRun
-    dry_run_tests = {
-        "ec2:StopInstances": lambda: ec2.stop_instances(InstanceIds=["i-00000000000000000"], DryRun=True),
-        "ec2:TerminateInstances": lambda: ec2.terminate_instances(InstanceIds=["i-00000000000000000"], DryRun=True),
-        "ec2:CreateSnapshot": lambda: ec2.create_snapshot(VolumeId="vol-00000000000000000", DryRun=True),
-        "ec2:ReleaseAddress": lambda: ec2.release_address(AllocationId="eipalloc-00000000000000000", DryRun=True),
-    }
+    # Try SimulatePrincipalPolicy first (evaluates all policies including SCPs and boundaries)
+    try:
+        iam = boto3.client("iam")
+        print("[AUTH] Using iam:SimulatePrincipalPolicy for permission check...")
+        response = iam.simulate_principal_policy(
+            PolicySourceArn=arn,
+            ActionNames=required_actions,
+        )
 
-    for action, test_fn in dry_run_tests.items():
-        try:
-            test_fn()
-        except Exception as err:
-            code = getattr(err, "response", {}).get("Error", {}).get("Code", "")
-            if code == "DryRunOperation":
+        for result in response.get("EvaluationResults", []):
+            action = result["EvalActionName"]
+            decision = result["EvalDecision"]
+            if decision == "allowed":
                 allowed_actions.add(action)
-                print(f"[AUTH] DryRun: {action}  allowed")
-            elif code in ["UnauthorizedOperation", "AccessDenied"]:
-                print(f"[AUTH] DryRun: {action}  denied")
+                print(f"[AUTH] {action}  allowed")
             else:
+                print(f"[AUTH] {action}  {decision}")
+
+    except Exception as e:
+        error_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+        if error_code in ["AccessDenied", "AccessDeniedException"]:
+            print("[AUTH] SimulatePrincipalPolicy not permitted. Falling back to read-only checks...")
+        else:
+            print(f"[AUTH] SimulatePrincipalPolicy failed ({error_code}). Falling back...")
+
+        # Fallback: test read-only calls to confirm basic access
+        region = "us-east-1"
+        fallback_tests = {
+            "ec2:DescribeInstances": lambda: boto3.client("ec2", region_name=region).describe_instances(MaxResults=5),
+            "cloudwatch:GetMetricStatistics": lambda: boto3.client("cloudwatch", region_name=region).list_metrics(Namespace="AWS/EC2", MaxRecords=1),
+            "compute-optimizer:GetIdleRecommendations": lambda: boto3.client("compute-optimizer", region_name=region).get_enrollment_status(),
+        }
+
+        for action, test_fn in fallback_tests.items():
+            try:
+                test_fn()
                 allowed_actions.add(action)
-                print(f"[AUTH] DryRun: {action}   assumed allowed ({code})")
+                print(f"[AUTH] Fallback: {action}  confirmed")
+            except Exception as err:
+                code = getattr(err, "response", {}).get("Error", {}).get("Code", "")
+                if code in ["AccessDeniedException", "AccessDenied", "UnauthorizedOperation"]:
+                    print(f"[AUTH] Fallback: {action}  denied")
+                else:
+                    allowed_actions.add(action)
+                    print(f"[AUTH] Fallback: {action}  assumed ({code})")
 
-    if "ec2:CreateSnapshot" in allowed_actions:
-        allowed_actions.add("ec2:DeleteVolume")
-
-    #  test with some dummy but real calls
-    non_ec2_tests = {
-        "cloudwatch:GetMetricStatistics": lambda: boto3.client("cloudwatch", region_name=region).list_metrics(Namespace="AWS/EC2", MaxRecords=1),
-        "ce:GetCostAndUsage": lambda: boto3.client("ce", region_name="us-east-1").get_cost_and_usage(
-            TimePeriod={"Start": (datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%d"), "End": (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")},
-            Granularity="DAILY", Metrics=["UnblendedCost"]
-        ),
-        "compute-optimizer:GetIdleRecommendations": lambda: boto3.client("compute-optimizer", region_name=region).get_enrollment_status(),
-    }
-
-    for action, test_fn in non_ec2_tests.items():
-        try:
-            test_fn()
-            allowed_actions.add(action)
-            print(f"[AUTH] Test: {action}  allowed")
-        except Exception as err:
-            code = getattr(err, "response", {}).get("Error", {}).get("Code", "")
-            if code in ["AccessDeniedException", "AccessDenied", "UnauthorizedOperation"]:
-                print(f"[AUTH] Test: {action}  denied")
-            else:
-                allowed_actions.add(action)
-                print(f"[AUTH] Test: {action}   assumed allowed ({code})")
+        # For write actions without SimulatePrincipalPolicy, we can't confirm upfront
+        print("[AUTH] Write permissions (stop/delete/release) will be validated at execution time.")
 
     # Mapping user allowed actions in IAM Policy to the tools actions
     allowed_tools = set()

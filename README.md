@@ -63,8 +63,8 @@ User Request
 └──────────┬──────────┘
            ▼
 ┌─────────────────────┐
-│ Permission Check    │ ← DryRun validates IAM at startup (fail-fast)
-│ (STS + EC2 DryRun)  │
+│ Permission Check    │ ← SimulatePrincipalPolicy evaluates full IAM chain
+│ (STS + IAM Simulate)│
 └──────────┬──────────┘
            ▼
 ┌─────────────────────┐
@@ -90,6 +90,7 @@ User Request
 
 * Python 3.12+
 * AWS credentials configured (SSO, IAM role, or environment variables)
+* (Recommended) `iam:SimulatePrincipalPolicy` permission on the caller's own ARN for upfront permission validation. Without it, write permissions are validated at execution time.
 * Amazon Bedrock access with Claude Sonnet model enabled
 * AWS Compute Optimizer enabled in the target account
 * (Optional) Amazon Bedrock Guardrail created for prompt injection protection
@@ -148,9 +149,14 @@ The agent will:
 $ python3 src/agent.py
 
 [AUTH] Identity resolved: arn:aws:iam::123456789012:role/CostOpsRole
-[AUTH] DryRun: ec2:StopInstances  allowed
-[AUTH] DryRun: ec2:CreateSnapshot  allowed
-[AUTH] DryRun: ec2:ReleaseAddress  denied
+[AUTH] Using iam:SimulatePrincipalPolicy for permission check...
+[AUTH] ec2:StopInstances  allowed
+[AUTH] ec2:CreateSnapshot  allowed
+[AUTH] ec2:DeleteVolume  allowed
+[AUTH] ec2:ReleaseAddress  denied
+[AUTH] ec2:DescribeInstances  allowed
+[AUTH] cloudwatch:GetMetricStatistics  allowed
+[AUTH] compute-optimizer:GetIdleRecommendations  allowed
 [REGIONS] Scanning 16 regions
 
 You are successfully Authenticated: jane.doe

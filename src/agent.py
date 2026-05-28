@@ -309,7 +309,7 @@ def get_idle_resources(account_id: str) -> dict:
                             instance_type = "Elastic IP"
                             created_date = str(addr.get("AllocationTime", ""))
                             last_modified = str(addr.get("AllocationTime", ""))
-                    except:
+                    except Exception:
                         pass
 
                     results.append({

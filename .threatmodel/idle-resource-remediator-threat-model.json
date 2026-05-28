@@ -1,0 +1,407 @@
+{
+  "schema": 1,
+  "applicationInfo": {
+    "name": "Threat Model Export",
+    "description": "An AI-powered AWS cost optimization agent that scans customer AWS accounts for idle resources (EC2 instances, EBS volumes, Elastic IPs), validates findings with 60-day CloudWatch metrics, and performs destructive remediation actions (stop, delete, release) with safety checks and double confirmation. Exposed both as a CLI agent and as an MCP server over stdio for integration with GenAI tools. Uses Amazon Bedrock Claude Sonnet as the reasoning engine with Strands SDK."
+  },
+  "architecture": {
+    "description": ""
+  },
+  "dataflow": {
+    "description": ""
+  },
+  "assumptions": [],
+  "mitigations": [
+    {
+      "id": "e19b4db1-2ce1-4de0-861f-a5829a6a8b99",
+      "numericId": 1,
+      "status": "mitigationIdentified",
+      "content": "Enable Bedrock Guardrail with prompt attack detection (MEDIUM+), credential pattern blocking, and denied topic filtering",
+      "displayOrder": 1,
+      "metadata": []
+    },
+    {
+      "id": "df54b3d3-d476-43ca-b3ee-cf80a4d18e5a",
+      "numericId": 2,
+      "status": "mitigationIdentified",
+      "content": "Use AWS SSO with MFA for credential management instead of long-lived access keys stored in ~/.aws/credentials",
+      "displayOrder": 2,
+      "metadata": []
+    },
+    {
+      "id": "ee272fd9-b1c6-463e-831a-21895775ddef",
+      "numericId": 3,
+      "status": "mitigationIdentified",
+      "content": "Implement centralized, tamper-proof audit logging via CloudWatch Logs or CloudTrail instead of local CSV",
+      "displayOrder": 3,
+      "metadata": []
+    },
+    {
+      "id": "4f2654c4-8268-40eb-aac1-4814d16384bf",
+      "numericId": 4,
+      "status": "mitigationIdentified",
+      "content": "Pin MCP server dependency versions and verify package integrity with checksums before installation",
+      "displayOrder": 4,
+      "metadata": []
+    },
+    {
+      "id": "4bc627df-f422-4b28-99b6-c5ef17f1cc01",
+      "numericId": 5,
+      "status": "mitigationIdentified",
+      "content": "Enforce least-privilege IAM policies with explicit deny on critical resources and SCP guardrails at org level",
+      "displayOrder": 5,
+      "metadata": []
+    },
+    {
+      "id": "b7fecc19-bb63-4ccf-9b74-a9c5706ef58e",
+      "numericId": 6,
+      "status": "mitigationResolved",
+      "content": "Double confirmation gate with resource-specific confirmation text prevents accidental actions",
+      "displayOrder": 6,
+      "metadata": []
+    },
+    {
+      "id": "ac52df16-c785-4178-871b-a72be13d82d4",
+      "numericId": 7,
+      "status": "mitigationResolved",
+      "content": "Mandatory snapshot before any volume deletion ensures data recovery is possible",
+      "displayOrder": 7,
+      "metadata": []
+    },
+    {
+      "id": "e0823d05-da99-415c-a55e-c30136aa5a3e",
+      "numericId": 8,
+      "status": "mitigationResolved",
+      "content": "Safety signal checks (ASG membership, network activity, IAM role) block or flag risky resources",
+      "displayOrder": 8,
+      "metadata": []
+    },
+    {
+      "id": "c9b9a0aa-18d2-4b16-97fc-d5ec3c9fe1d6",
+      "numericId": 9,
+      "status": "mitigationResolved",
+      "content": "Batch size limit of 5 resources per request with summary between batches prevents mass deletion",
+      "displayOrder": 9,
+      "metadata": []
+    },
+    {
+      "id": "3f002c71-cfcc-4ce3-8a97-55d8ffae152d",
+      "numericId": 10,
+      "status": "mitigationResolved",
+      "content": "SimulatePrincipalPolicy pre-check validates permissions upfront, limiting agent to authorized actions only",
+      "displayOrder": 10,
+      "metadata": []
+    },
+    {
+      "id": "1a91f755-af80-429a-949e-d6861cc96d08",
+      "numericId": 11,
+      "status": "mitigationResolved",
+      "content": "MCP server uses stdio transport only (no network listener) preventing remote unauthorized access",
+      "displayOrder": 11,
+      "metadata": []
+    },
+    {
+      "id": "188e594d-8cf5-4099-8fa8-6206a19861d9",
+      "numericId": 12,
+      "status": "mitigationResolved",
+      "content": "System prompt instructs model to never trust user claims about permissions and only use available tools",
+      "displayOrder": 12,
+      "metadata": []
+    }
+  ],
+  "assumptionLinks": [],
+  "mitigationLinks": [
+    {
+      "linkedId": "61be7995-df2b-4da6-8798-df19ce7b7e97",
+      "mitigationId": "df54b3d3-d476-43ca-b3ee-cf80a4d18e5a"
+    },
+    {
+      "linkedId": "a67790ba-01b0-4a3a-8d03-8129ad06515b",
+      "mitigationId": "e19b4db1-2ce1-4de0-861f-a5829a6a8b99"
+    },
+    {
+      "linkedId": "f7332176-a852-47a3-9993-66deb9d62097",
+      "mitigationId": "ee272fd9-b1c6-463e-831a-21895775ddef"
+    },
+    {
+      "linkedId": "91ca0f98-955b-4ba0-935a-5d6bcf67053d",
+      "mitigationId": "ee272fd9-b1c6-463e-831a-21895775ddef"
+    },
+    {
+      "linkedId": "26bcb31b-f874-4848-83ed-a501d555fc55",
+      "mitigationId": "4f2654c4-8268-40eb-aac1-4814d16384bf"
+    },
+    {
+      "linkedId": "f76ded2a-d8e3-4065-af45-6ac566cad800",
+      "mitigationId": "4bc627df-f422-4b28-99b6-c5ef17f1cc01"
+    },
+    {
+      "linkedId": "2d6a9223-f09e-4c4f-a2e1-01353128e779",
+      "mitigationId": "b7fecc19-bb63-4ccf-9b74-a9c5706ef58e"
+    },
+    {
+      "linkedId": "2d6a9223-f09e-4c4f-a2e1-01353128e779",
+      "mitigationId": "ac52df16-c785-4178-871b-a72be13d82d4"
+    },
+    {
+      "linkedId": "0dc67e6c-c558-491d-a78f-8794aabdcbd5",
+      "mitigationId": "c9b9a0aa-18d2-4b16-97fc-d5ec3c9fe1d6"
+    },
+    {
+      "linkedId": "931c4468-5145-43dc-bf26-e9a433e10bb3",
+      "mitigationId": "1a91f755-af80-429a-949e-d6861cc96d08"
+    },
+    {
+      "linkedId": "cf706f12-91c3-49c6-a8a2-1bef0185877b",
+      "mitigationId": "e19b4db1-2ce1-4de0-861f-a5829a6a8b99"
+    },
+    {
+      "linkedId": "e50e7d48-eccc-4309-bdbb-73a7b05c861e",
+      "mitigationId": "188e594d-8cf5-4099-8fa8-6206a19861d9"
+    }
+  ],
+  "threats": [
+    {
+      "id": "61be7995-df2b-4da6-8798-df19ce7b7e97",
+      "numericId": 1,
+      "threatSource": "Compromised Credential Attacker",
+      "prerequisites": "Access to operator workstation or credential store",
+      "threatAction": "Steal AWS credentials from ~/.aws/ to impersonate operator",
+      "threatImpact": "Full account access: delete resources, exfiltrate data",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A008"
+      ],
+      "statement": "A Compromised Credential Attacker Access to operator workstation or credential store can Steal AWS credentials from ~/.aws/ to impersonate operator, which leads to Full account access: delete resources, exfiltrate data",
+      "displayOrder": 1,
+      "status": "threatIdentified",
+      "tags": [
+        "credentials",
+        "authentication"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "a67790ba-01b0-4a3a-8d03-8129ad06515b",
+      "numericId": 2,
+      "threatSource": "Prompt Injection Attacker",
+      "prerequisites": "Ability to send input to the agent (direct or indirect)",
+      "threatAction": "Inject malicious prompts to override system prompt safety rules",
+      "threatImpact": "Bypass safety checks, execute unauthorized destructive actions",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A009",
+        "A013"
+      ],
+      "statement": "A Prompt Injection Attacker Ability to send input to the agent (direct or indirect) can Inject malicious prompts to override system prompt safety rules, which leads to Bypass safety checks, execute unauthorized destructive actions",
+      "displayOrder": 2,
+      "status": "threatIdentified",
+      "tags": [
+        "prompt-injection",
+        "LLM"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "26bcb31b-f874-4848-83ed-a501d555fc55",
+      "numericId": 3,
+      "threatSource": "Supply Chain Attacker (MCP)",
+      "prerequisites": "Compromise of MCP server package in PyPI/registry",
+      "threatAction": "Inject malicious responses via compromised MCP server dependency",
+      "threatImpact": "Return false cost data to trick operator into wrong decisions",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A012"
+      ],
+      "statement": "A Supply Chain Attacker (MCP) Compromise of MCP server package in PyPI/registry can Inject malicious responses via compromised MCP server dependency, which leads to Return false cost data to trick operator into wrong decisions",
+      "displayOrder": 3,
+      "status": "threatIdentified",
+      "tags": [
+        "supply-chain",
+        "MCP"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "91ca0f98-955b-4ba0-935a-5d6bcf67053d",
+      "numericId": 4,
+      "threatSource": "Malicious Insider",
+      "prerequisites": "Local file system access on operator machine",
+      "threatAction": "Modify or delete audit log CSV to hide unauthorized actions",
+      "threatImpact": "Loss of accountability, inability to detect past breaches",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A011"
+      ],
+      "statement": "A Malicious Insider Local file system access on operator machine can Modify or delete audit log CSV to hide unauthorized actions, which leads to Loss of accountability, inability to detect past breaches",
+      "displayOrder": 4,
+      "status": "threatIdentified",
+      "tags": [
+        "audit",
+        "integrity"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "f76ded2a-d8e3-4065-af45-6ac566cad800",
+      "numericId": 5,
+      "threatSource": "Compromised Credential Attacker",
+      "prerequisites": "Compromised credentials or successful prompt injection",
+      "threatAction": "Use agent to delete resources beyond operator's intended scope",
+      "threatImpact": "Production outage from mass resource deletion across regions",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A010"
+      ],
+      "statement": "A Compromised Credential Attacker Compromised credentials or successful prompt injection can Use agent to delete resources beyond operator's intended scope, which leads to Production outage from mass resource deletion across regions",
+      "displayOrder": 5,
+      "status": "threatIdentified",
+      "tags": [
+        "destructive",
+        "escalation"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "e50e7d48-eccc-4309-bdbb-73a7b05c861e",
+      "numericId": 6,
+      "threatSource": "Prompt Injection Attacker",
+      "prerequisites": "Access to conversation logs or Bedrock API traffic",
+      "threatAction": "Extract account IDs, resource IDs, cost data from agent context",
+      "threatImpact": "Reconnaissance data enables targeted attacks on AWS account",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A012",
+        "A009"
+      ],
+      "statement": "A Prompt Injection Attacker Access to conversation logs or Bedrock API traffic can Extract account IDs, resource IDs, cost data from agent context, which leads to Reconnaissance data enables targeted attacks on AWS account",
+      "displayOrder": 6,
+      "status": "threatIdentified",
+      "tags": [
+        "data-leak",
+        "account-info"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "0dc67e6c-c558-491d-a78f-8794aabdcbd5",
+      "numericId": 7,
+      "threatSource": "Malicious Insider",
+      "prerequisites": "Valid credentials and agent access",
+      "threatAction": "Use batch_execute to stop/delete maximum resources per request",
+      "threatImpact": "Service disruption from mass stopping of EC2 instances",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A010"
+      ],
+      "statement": "A Malicious Insider Valid credentials and agent access can Use batch_execute to stop/delete maximum resources per request, which leads to Service disruption from mass stopping of EC2 instances",
+      "displayOrder": 7,
+      "status": "threatIdentified",
+      "tags": [
+        "availability",
+        "batch-delete"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "f7332176-a852-47a3-9993-66deb9d62097",
+      "numericId": 8,
+      "threatSource": "Malicious Insider",
+      "prerequisites": "Agent running without centralized logging configured",
+      "threatAction": "Deny performing destructive actions due to local-only audit logs",
+      "threatImpact": "Cannot prove who performed actions; no tamper-proof evidence",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A011"
+      ],
+      "statement": "A Malicious Insider Agent running without centralized logging configured can Deny performing destructive actions due to local-only audit logs, which leads to Cannot prove who performed actions; no tamper-proof evidence",
+      "displayOrder": 8,
+      "status": "threatIdentified",
+      "tags": [
+        "audit",
+        "logging"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "931c4468-5145-43dc-bf26-e9a433e10bb3",
+      "numericId": 9,
+      "threatSource": "Compromised Credential Attacker",
+      "prerequisites": "MCP server exposed beyond local stdio (misconfiguration)",
+      "threatAction": "Access MCP server tools without authentication to call AWS APIs",
+      "threatImpact": "Unauthorized resource modification via unauthenticated MCP access",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A008"
+      ],
+      "statement": "A Compromised Credential Attacker MCP server exposed beyond local stdio (misconfiguration) can Access MCP server tools without authentication to call AWS APIs, which leads to Unauthorized resource modification via unauthenticated MCP access",
+      "displayOrder": 9,
+      "status": "threatIdentified",
+      "tags": [
+        "MCP",
+        "credentials"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "2d6a9223-f09e-4c4f-a2e1-01353128e779",
+      "numericId": 10,
+      "threatSource": "Accidental Operator",
+      "prerequisites": "Operator fatigue or unclear resource identification in CLI",
+      "threatAction": "Accidentally confirm deletion of wrong resource in batch operation",
+      "threatImpact": "Unintended deletion of active production resources",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A010"
+      ],
+      "statement": "A Accidental Operator Operator fatigue or unclear resource identification in CLI can Accidentally confirm deletion of wrong resource in batch operation, which leads to Unintended deletion of active production resources",
+      "displayOrder": 10,
+      "status": "threatIdentified",
+      "tags": [
+        "human-error",
+        "confirmation"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "7e9d77c9-036d-46fc-95e2-e77d26f5b42b",
+      "numericId": 11,
+      "threatSource": "Supply Chain Attacker (MCP)",
+      "prerequisites": "Ability to intercept or modify agent-to-Bedrock communication",
+      "threatAction": "Manipulate model responses to approve unsafe resource actions",
+      "threatImpact": "Agent acts on fabricated safety verdicts, deletes active resources",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A013"
+      ],
+      "statement": "A Supply Chain Attacker (MCP) Ability to intercept or modify agent-to-Bedrock communication can Manipulate model responses to approve unsafe resource actions, which leads to Agent acts on fabricated safety verdicts, deletes active resources",
+      "displayOrder": 11,
+      "status": "threatIdentified",
+      "tags": [
+        "model",
+        "integrity"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "cf706f12-91c3-49c6-a8a2-1bef0185877b",
+      "numericId": 12,
+      "threatSource": "Prompt Injection Attacker",
+      "prerequisites": "Guardrail not configured (default state in code)",
+      "threatAction": "Exploit missing Bedrock Guardrail to bypass prompt injection protection",
+      "threatImpact": "No defense against prompt attacks when guardrail is unconfigured",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A008"
+      ],
+      "statement": "A Prompt Injection Attacker Guardrail not configured (default state in code) can Exploit missing Bedrock Guardrail to bypass prompt injection protection, which leads to No defense against prompt attacks when guardrail is unconfigured",
+      "displayOrder": 12,
+      "status": "threatIdentified",
+      "tags": [
+        "guardrail",
+        "configuration"
+      ],
+      "metadata": []
+    }
+  ]
+}

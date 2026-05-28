@@ -417,7 +417,7 @@ def batch_execute(action: str, resource_ids: list, region: str, reason: str, bat
                 elif "eipalloc-" in rid:
                     a = ec2.describe_addresses(AllocationIds=[rid])["Addresses"][0]
                     name = a.get("PublicIp", "")
-            except:
+            except Exception:
                 pass
             print(f"  - {rid} ({name})" if name else f"  - {rid}")
 

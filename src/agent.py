@@ -774,6 +774,7 @@ if __name__ == "__main__":
             user_input = input("\nYou: ").strip()
             if user_input.lower() in ["exit", "quit"]: break
             if not user_input: continue
+            logger.info(f"Processing request (length: {len(user_input)} chars)")
             agent(user_input)
         except KeyboardInterrupt:
             print("\nExiting.")

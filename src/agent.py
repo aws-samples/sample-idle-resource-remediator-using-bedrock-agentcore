@@ -356,7 +356,15 @@ def get_idle_resources(account_id: str) -> dict:
 def export_idle_report(account_id: str, output_path: str = "idle-resources-report.csv") -> str:
     """Export full idle resources list to CSV for customer review. Includes name, tags, type. Customer marks approve=Y."""
     import csv
+    import os
     print(f"[EXPORT] Generating full report for {account_id}...")
+
+    # Validate output path stays within working directory
+    resolved = os.path.realpath(output_path)
+    allowed_dir = os.path.realpath(os.getcwd())
+    if not resolved.startswith(allowed_dir + os.sep) and resolved != allowed_dir:
+        return "DENIED: output_path must resolve within the working directory."
+    os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
 
     # Reuse get_idle_resources logic
     data = get_idle_resources.fn(account_id)

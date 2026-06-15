@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .env
 reports/
+.DS_Store
+*.egg-info/
+.ash/
+brazil.ion
+.crux_dry_run_build
+dist/
+.env.local

@@ -206,8 +206,8 @@ The agent can connect to MCP servers for enhanced cost analysis:
 
 ```bash
 # Install MCP servers
-pip install awslabs.billing-cost-management-mcp-server
-pip install awslabs.aws-pricing-mcp-server
+pip install awslabs.billing-cost-management-mcp-server==0.1.0
+pip install awslabs.aws-pricing-mcp-server==0.1.0
 ```
 
 These provide structured pricing lookups and Cost Explorer queries beyond what the base AWS CLI offers.

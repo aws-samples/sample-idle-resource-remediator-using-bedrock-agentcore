@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 
 import boto3
+from botocore.exceptions import ClientError
 import json
 import sys
 import logging
@@ -56,7 +57,8 @@ def audit_log(action: str, resource: str, region: str, reason: str, extra: dict 
         for key in ["resource", "reason"]:
             entry[key] = re.sub(r'\d{12}', '***REDACTED***', str(entry[key]))
 
-    logger.info(json.dumps(entry))
+    log_entry = {k: v for k, v in entry.items() if k not in ["reason"]}
+    logger.info(json.dumps(log_entry))
     print(f"[AUDIT] {action} on {resource} — logged")
 
 # Calling the user identity
@@ -309,7 +311,7 @@ def get_idle_resources(account_id: str) -> dict:
                             instance_type = "Elastic IP"
                             created_date = str(addr.get("AllocationTime", ""))
                             last_modified = str(addr.get("AllocationTime", ""))
-                    except Exception:
+                    except (KeyError, IndexError, ClientError):
                         pass
 
                     results.append({
@@ -329,7 +331,8 @@ def get_idle_resources(account_id: str) -> dict:
                 if not next_token:
                     break
         except Exception as e:
-            print(f"[IDLE] Failed in {r}: {e}")
+            error_code = getattr(e, "response", {}).get("Error", {}).get("Code", type(e).__name__)
+            print(f"[IDLE] Failed in {r}: {error_code}")
 
     by_type = {}
     total_savings = 0
@@ -417,7 +420,7 @@ def batch_execute(action: str, resource_ids: list, region: str, reason: str, bat
                 elif "eipalloc-" in rid:
                     a = ec2.describe_addresses(AllocationIds=[rid])["Addresses"][0]
                     name = a.get("PublicIp", "")
-            except Exception:
+            except (KeyError, IndexError, ClientError):
                 pass
             print(f"  - {rid} ({name})" if name else f"  - {rid}")
 
@@ -447,7 +450,8 @@ def batch_execute(action: str, resource_ids: list, region: str, reason: str, bat
                     if code in ["UnauthorizedOperation", "AccessDenied"]:
                         print(f"  [BLOCKED] {rid} - SCP restriction")
                     else:
-                        print(f"  [FAIL] {rid} - {e}")
+                        error_code = getattr(e, "response", {}).get("Error", {}).get("Code", type(e).__name__)
+                        print(f"  [FAIL] {rid} - {error_code}")
                     failed.append(rid)
         elif confirm.lower() == "skip":
             print(f"[BATCH {batch_num + 1}] Skipped")

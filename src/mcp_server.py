@@ -27,6 +27,7 @@ Usage:
 """
 
 import boto3
+from botocore.exceptions import ClientError
 import json
 import os
 from datetime import datetime, timedelta
@@ -84,7 +85,7 @@ def get_idle_resources(account_id: str, regions: list[str] | None = None) -> dic
                         desc = ec2.describe_volumes(VolumeIds=[resource_id])
                         tags = {t["Key"]: t["Value"] for t in desc["Volumes"][0].get("Tags", [])}
                         name = tags.get("Name", "")
-                except Exception:
+                except (KeyError, IndexError, ClientError):
                     pass
 
                 results.append({

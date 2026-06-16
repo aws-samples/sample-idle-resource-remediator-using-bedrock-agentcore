@@ -38,7 +38,7 @@ Before using this in a production environment, implement the following:
 2. **Bedrock Guardrails:** Configure Amazon Bedrock Guardrails to filter harmful prompts and enforce content policies
 3. **Audit logging:** Send all agent actions to CloudWatch Logs with a dedicated log group for audit trail
 4. **Network isolation:** Run the agent in a private subnet with no inbound internet access
-5. **KMS encryption:** Use a customer-managed KMS key to encrypt audit logs and any exported reports
+5. **Encryption:** EBS snapshots are created with encryption enabled by default. For additional control, configure a customer-managed KMS key in the GUARDRAILS configuration.
 6. **Least privilege IAM:** Restrict the agent role to only the specific accounts and regions it needs to operate on
 7. **Rate limiting:** Implement throttling on the number of remediation actions per execution
 

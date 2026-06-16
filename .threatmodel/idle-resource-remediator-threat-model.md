@@ -249,10 +249,10 @@ An AI-powered AWS cost optimization agent that scans customer AWS accounts for i
 - **Trust Level**: TrustLevel.UNTRUSTED
 - **Description**: The public internet, considered untrusted
 
-#### DMZ
+#### Perimeter Network
 
 - **Trust Level**: TrustLevel.LOW
-- **Description**: Demilitarized zone for public-facing services
+- **Description**: Perimeter network for public-facing services
 
 #### Application
 
@@ -297,7 +297,7 @@ An AI-powered AWS cost optimization agent that scans customer AWS accounts for i
 - **Controls**: Web Application Firewall, DDoS Protection, TLS Encryption
 - **Description**: Boundary between the internet and internal systems
 
-#### DMZ Boundary
+#### Perimeter Network Boundary
 
 - **Type**: BoundaryType.NETWORK
 - **Controls**: Network Firewall, Intrusion Detection System, API Gateway

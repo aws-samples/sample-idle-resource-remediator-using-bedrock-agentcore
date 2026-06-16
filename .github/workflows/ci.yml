@@ -34,12 +34,12 @@ jobs:
 
       - name: Lint
         run: |
-          pip install ruff
+          pip install ruff==0.4.5
           ruff check src/
 
       - name: Type check
         run: |
-          pip install pyright
+          pip install pyright==1.1.350
           pyright src/ --level basic || true
 
       - name: Test

@@ -102,7 +102,7 @@ git clone <repo-url>
 cd idle-resource-remediator
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt  # All dependencies pinned to exact versions
 ```
 
 ## Configuration

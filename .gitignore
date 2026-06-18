@@ -10,3 +10,4 @@ brazil.ion
 .crux_dry_run_build
 dist/
 .env.local
+.kiro/

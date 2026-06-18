@@ -28,7 +28,7 @@ pluggy==1.5.0
     # via pytest
 psutil==6.0.0
     # via pytest-xdist
-pytest==8.3.2
+pytest==9.0.3
     # via
     #   hatch.envs.hatch-test.py3.11
     #   pytest-mock

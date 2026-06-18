@@ -11,7 +11,7 @@ An AI agent built with [Strands Agents SDK](https://github.com/strands-agents/sd
 The agent uses the Strands SDK with Amazon Bedrock (Claude Sonnet with adaptive thinking) as the reasoning engine. Tools are defined as Python functions decorated with `@tool`. The model decides which tools to call based on the conversation context.
 
 ```
-┌──────────────┐     ┌───────────────────────┐     ┌──────────────────┐
+┌──────────────┐     ┌─────-──────────────────┐     ┌──────────────────┐
 │ User         │────▶│ Strands Agent          │────▶│ AWS APIs         │
 │              │     │ (Bedrock Claude)       │     │ (EC2, CW, CO, CE)│
 └──────────────┘     │                        │     └──────────────────┘

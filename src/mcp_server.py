@@ -30,7 +30,7 @@ import boto3
 from botocore.exceptions import ClientError
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("idle-resource-remediator")
@@ -114,7 +114,7 @@ def get_usage_pattern(resource_id: str, region: str, days: int = 60) -> dict:
         Metric summary with peak CPU, total network packets, disk I/O, and idle assessment.
     """
     cw = boto3.client("cloudwatch", region_name=region)
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
     if resource_id.startswith("i-"):
@@ -186,8 +186,8 @@ def check_safety(resource_id: str, region: str) -> dict:
         net = cw.get_metric_statistics(
             Namespace="AWS/EC2", MetricName="NetworkPacketsIn",
             Dimensions=[{"Name": "InstanceId", "Value": resource_id}],
-            StartTime=datetime.utcnow() - timedelta(days=3),
-            EndTime=datetime.utcnow(), Period=86400, Statistics=["Sum"]
+            StartTime=datetime.now(timezone.utc) - timedelta(days=3),
+            EndTime=datetime.now(timezone.utc), Period=86400, Statistics=["Sum"]
         )
         if any(dp["Sum"] > 1000 for dp in net.get("Datapoints", [])):
             signals.append({"signal": "Network activity (3d)", "severity": "INVESTIGATE"})
@@ -237,7 +237,7 @@ def stop_instance(instance_id: str, region: str, reason: str) -> dict:
     ec2.stop_instances(InstanceIds=[instance_id])
 
     return {"action": "stop_instance", "instance_id": instance_id, "region": region,
-            "reason": reason, "result": "success", "timestamp": datetime.utcnow().isoformat()}
+            "reason": reason, "result": "success", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @mcp.tool()
@@ -263,7 +263,7 @@ def snapshot_and_delete_volume(volume_id: str, region: str, reason: str) -> dict
     snap = ec2.create_snapshot(
         VolumeId=volume_id,
         Encrypted=True,
-        Description=f"Pre-delete backup by idle-resource-remediator {datetime.utcnow().strftime('%Y-%m-%d')}"
+        Description=f"Pre-delete backup by idle-resource-remediator {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     )
     snapshot_id = snap["SnapshotId"]
 
@@ -276,7 +276,7 @@ def snapshot_and_delete_volume(volume_id: str, region: str, reason: str) -> dict
 
     return {"action": "snapshot_and_delete_volume", "volume_id": volume_id, "region": region,
             "snapshot_id": snapshot_id, "reason": reason, "result": "success",
-            "timestamp": datetime.utcnow().isoformat()}
+            "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @mcp.tool()
@@ -303,7 +303,7 @@ def release_elastic_ip(allocation_id: str, region: str, reason: str) -> dict:
 
     return {"action": "release_elastic_ip", "allocation_id": allocation_id, "region": region,
             "public_ip": addr.get("PublicIp"), "reason": reason, "result": "success",
-            "timestamp": datetime.utcnow().isoformat()}
+            "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 if __name__ == "__main__":

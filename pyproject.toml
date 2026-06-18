@@ -38,8 +38,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/aws-samples/idle-resource-remediator"
-Issues = "https://github.com/aws-samples/idle-resource-remediator/issues"
+Homepage = "https://github.com/aws-samples/sample-idle-resource-remediator-using-bedrock-agentcore"
+Issues = "https://github.com/aws-samples/sample-idle-resource-remediator-using-bedrock-agentcore/issues"
 
 [project.scripts]
 idle-resource-remediator = "src.mcp_server:mcp.run"

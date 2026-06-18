@@ -11,3 +11,4 @@ brazil.ion
 dist/
 .env.local
 .kiro/
+.$*.drawio.bkp

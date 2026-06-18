@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 import json
 import sys
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
 from strands.tools.mcp import MCPClient
@@ -50,7 +50,7 @@ def audit_log(action: str, resource: str, region: str, reason: str, extra: dict 
         "resource": resource,
         "region": region,
         "reason": reason,
-        "time": datetime.utcnow().isoformat(),
+        "time": datetime.now(timezone.utc).isoformat(),
     }
     if extra:
         entry.update(extra)
@@ -236,8 +236,8 @@ def check_resource_safety(resource_id: str, resource_type: str, region: str) -> 
         net_response = cw.get_metric_statistics(
             Namespace="AWS/EC2", MetricName="NetworkPacketsIn",
             Dimensions=[{"Name": "InstanceId", "Value": resource_id}],
-            StartTime=datetime.utcnow() - timedelta(days=3),
-            EndTime=datetime.utcnow(), Period=86400, Statistics=["Sum"],
+            StartTime=datetime.now(timezone.utc) - timedelta(days=3),
+            EndTime=datetime.now(timezone.utc), Period=86400, Statistics=["Sum"],
         )
         if any(dp["Sum"] > 1000 for dp in net_response.get("Datapoints", [])):
             signals.append("Network activity in last 3 days")

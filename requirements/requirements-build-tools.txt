@@ -81,7 +81,7 @@ pluggy==1.5.0
     # via hatchling
 ptyprocess==0.7.0
     # via pexpect
-pygments==2.18.0
+pygments==2.20.0
     # via rich
 pyproject-hooks==1.1.0
     # via

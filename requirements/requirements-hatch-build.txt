@@ -8,7 +8,7 @@ build==1.2.1
     # via hatch.envs.hatch-build
 distlib==0.3.8
     # via virtualenv
-filelock>=3.16.1
+filelock>=3.16.1, <4
     # via virtualenv
 packaging==24.1
     # via build
@@ -16,5 +16,5 @@ platformdirs==4.2.2
     # via virtualenv
 pyproject-hooks==1.1.0
     # via build
-virtualenv>=20.27.1
+virtualenv>=20.27.1, <22
     # via build

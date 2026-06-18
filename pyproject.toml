@@ -25,16 +25,16 @@ classifiers = [
 ]
 
 dependencies = [
-    "strands-agents>=1.41.0, <2",
-    "strands-agents-bedrock>=0.0.1, <1",
-    "boto3>=1.43.14, <2",
-    "mcp[cli]>=1.27.1, <2",
+    "strands-agents==1.41.0",
+    "strands-agents-bedrock==0.0.1",
+    "boto3==1.43.14",
+    "mcp[cli]==1.27.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.0.3, <10",
-    "moto>=5.2.1, <6",
+    "pytest==9.0.3",
+    "moto==5.2.1",
 ]
 
 [project.urls]

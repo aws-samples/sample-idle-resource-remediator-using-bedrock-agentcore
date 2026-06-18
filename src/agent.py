@@ -40,7 +40,11 @@ GUARDRAILS = {
 
 # Defining Audit logs which will go into Stdout, if it needs to go to any telemetry service, required coding needs to be done
 def audit_log(action: str, resource: str, region: str, reason: str, extra: dict = None):
-    """Write audit log with data protection — masks sensitive fields if configured."""
+    """Write audit log with data protection — masks sensitive fields if configured.
+
+    Note: The 'reason' field is operator-provided. Do not include sensitive
+    personal information (emails, names, IPs) in reason strings.
+    """
     entry = {
         "action": action,
         "resource": resource,
@@ -59,7 +63,7 @@ def audit_log(action: str, resource: str, region: str, reason: str, extra: dict 
 
     log_entry = {k: v for k, v in entry.items() if k not in ["reason"]}
     logger.info(json.dumps(log_entry))
-    print(f"[AUDIT] {action} on {resource} — logged")
+    print(f"[AUDIT] {action} on {entry['resource']} — logged")
 
 # Calling the user identity
 def get_caller_identity() -> dict:

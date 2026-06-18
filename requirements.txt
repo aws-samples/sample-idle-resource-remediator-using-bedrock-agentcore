@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-strands-agents==0.1.0
-strands-agents-bedrock==0.1.0
-boto3==1.35.0
-mcp[cli]==1.27.2
+strands-agents==1.41.0
+strands-agents-bedrock==0.0.1
+boto3==1.43.14
+mcp[cli]==1.27.1

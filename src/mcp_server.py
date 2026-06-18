@@ -30,6 +30,7 @@ import boto3
 from botocore.exceptions import ClientError
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from mcp.server.fastmcp import FastMCP
 
@@ -96,7 +97,7 @@ def get_idle_resources(account_id: str, regions: list[str] | None = None) -> dic
                     "monthly_savings": monthly,
                 })
         except Exception as e:
-            results.append({"region": region, "error": str(e)})
+            results.append({"region": region, "error": re.sub(r'\d{12}', '***REDACTED***', str(e))})
 
     return {"idle_resources": results, "total_count": len([r for r in results if "error" not in r])}
 

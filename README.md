@@ -92,7 +92,7 @@ User Request
 * AWS credentials configured (SSO, IAM role, or environment variables)
 * (Recommended) `iam:SimulatePrincipalPolicy` permission on the caller's own ARN for upfront permission validation. Without it, write permissions are validated at execution time.
 * Amazon Bedrock access with Claude Sonnet model enabled
-* AWS Compute Optimizer enabled in the target account
+* (Optional) AWS Compute Optimizer enabled in the target account for idle recommendations
 * (Optional) Amazon Bedrock Guardrail created for prompt injection protection
 
 ## Installation
@@ -100,9 +100,11 @@ User Request
 ```bash
 git clone <repo-url>
 cd idle-resource-remediator
+python3 --version  # Ensure Python 3.12+
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt  # All dependencies pinned to exact versions
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
 ## Configuration
@@ -120,6 +122,14 @@ GUARDRAILS = {
         "guardrail_version": "DRAFT",
     },
 }
+```
+
+### Changing the Model
+
+The agent defaults to `us.anthropic.claude-sonnet-4-6` via cross-region inference. You can change this to any Bedrock-supported model by editing the `model_id` in `src/agent.py`:
+
+```python
+model = BedrockModel(model_id="us.anthropic.claude-sonnet-4-6")  # Change to your preferred model
 ```
 
 ### Creating a Bedrock Guardrail (optional but recommended)
@@ -202,15 +212,9 @@ Type 'confirm delete vol-0def456' to execute.
 
 ## MCP Server Integration (Optional)
 
-The agent can connect to MCP servers for enhanced cost analysis:
+The agent automatically connects to AWS MCP servers at runtime via `uvx` for enhanced cost analysis (pricing lookups and Cost Explorer queries). No manual installation is needed — `uvx` (provided by the `uv` dependency) downloads and launches the servers on first run.
 
-```bash
-# Install MCP servers
-pip install awslabs.billing-cost-management-mcp-server==0.1.0
-pip install awslabs.aws-pricing-mcp-server==0.1.0
-```
-
-These provide structured pricing lookups and Cost Explorer queries beyond what the base AWS CLI offers.
+If `uvx` is unavailable or the MCP servers fail to connect, the agent continues without them — core functionality is unaffected.
 
 ## Audit Log
 
@@ -232,6 +236,8 @@ The agent's tools are also exposed as an MCP server, so customers can plug them 
 ```bash
 python3 src/mcp_server.py
 ```
+
+You can attach the MCP server to any MCP-compatible client. Below are examples for popular tools:
 
 ### Add to Claude Desktop
 
@@ -287,8 +293,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ## Limitations
 
-* Requires Compute Optimizer enabled in the account (for idle recommendations)
-* CloudWatch metrics need 60 days of history for accurate validation
+* Compute Optimizer must be enabled (opt-in) for idle recommendations — the agent falls back to CloudWatch-only validation if unavailable
+* CloudWatch lookback defaults to 60 days but works with whatever history is available — no setup needed
 * Bedrock access required in the deployment region
 * Single account at a time (multi-account via Organizations planned)
 * Guardrail ID is account-specific — create your own via Bedrock console

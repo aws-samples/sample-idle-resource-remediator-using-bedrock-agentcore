@@ -447,7 +447,7 @@ def batch_execute(action: str, resource_ids: list, region: str, reason: str, bat
                         ec2.stop_instances(InstanceIds=[rid])
                         print(f"  [OK] Stopped {rid}")
                     elif action == "snapshot_and_delete":
-                        snap = ec2.create_snapshot(VolumeId=rid, Description=f"Batch delete. {reason}", Encrypted=True,
+                        snap = ec2.create_snapshot(VolumeId=rid, Description=f"Batch delete. {reason}",
                             TagSpecifications=[{"ResourceType": "snapshot", "Tags": [
                                 {"Key": "CreatedBy", "Value": "cost-optimizer-agent"},
                                 {"Key": "SourceVolume", "Value": rid}]}])
@@ -611,7 +611,7 @@ def snapshot_and_delete_volume(volume_id: str, region: str, reason: str) -> str:
         return "Aborted (second confirmation)."
     print(f"[ACTION] Step 1/3: Creating snapshot...")
     try:
-        snap = ec2.create_snapshot(VolumeId=volume_id, Description=f"Pre-deletion. Reason: {reason}", Encrypted=True,
+        snap = ec2.create_snapshot(VolumeId=volume_id, Description=f"Pre-deletion. Reason: {reason}",
             TagSpecifications=[{"ResourceType": "snapshot", "Tags": [
                 {"Key": "CreatedBy", "Value": "cost-optimizer-agent"}, {"Key": "SourceVolume", "Value": volume_id}, {"Key": "DeletionReason", "Value": reason}]}])
         snapshot_id = snap["SnapshotId"]

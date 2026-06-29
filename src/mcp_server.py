@@ -263,7 +263,6 @@ def snapshot_and_delete_volume(volume_id: str, region: str, reason: str) -> dict
     # Mandatory snapshot
     snap = ec2.create_snapshot(
         VolumeId=volume_id,
-        Encrypted=True,
         Description=f"Pre-delete backup by idle-resource-remediator {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     )
     snapshot_id = snap["SnapshotId"]

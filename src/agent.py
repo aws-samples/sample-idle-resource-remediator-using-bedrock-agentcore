@@ -85,7 +85,7 @@ def get_active_regions() -> list:
     else:
         # "all" — discover enabled regions dynamically
         ec2 = boto3.client("ec2", region_name="us-east-1")
-        response = ec2.describe_regions(AllRegionsOpt=False)
+        response = ec2.describe_regions(AllRegions=False)
         regions = [r["RegionName"] for r in response["Regions"] if r["RegionName"] not in excluded]
 
     print(f"[REGIONS] Scanning {len(regions)} regions: {', '.join(sorted(regions))}")
@@ -533,7 +533,7 @@ def get_usage_pattern(resource_id: str, resource_type: str, region: str, days: i
 def find_unattached_ebs_volumes(account_id: str) -> list:
     """Find EBS volumes not attached to any instance. Scans all regions automatically."""
     volumes = []
-    for r in GUARDRAILS["allowed_regions"]:
+    for r in get_active_regions():
         print(f"[EBS] Scanning in {r} for account {account_id}...")
         ec2 = boto3.client("ec2", region_name=r)
         response = ec2.describe_volumes(Filters=[{"Name": "status", "Values": ["available"]}])
@@ -551,7 +551,7 @@ def find_unattached_ebs_volumes(account_id: str) -> list:
 def find_unassociated_eips(account_id: str) -> list:
     """Find Elastic IPs not associated with any instance. Scans all regions automatically."""
     eips = []
-    for r in GUARDRAILS["allowed_regions"]:
+    for r in get_active_regions():
         print(f"[EIP] Scanning in {r} for account {account_id}...")
         ec2 = boto3.client("ec2", region_name=r)
         for addr in ec2.describe_addresses().get("Addresses", []):
@@ -724,7 +724,7 @@ def create_agent(permissions: dict):
         print("[MCP] Connecting AWS Billing & Cost Management MCP server...")
         cost_mcp = MCPClient(lambda: stdio_client(StdioServerParameters(
             command="uvx", args=["awslabs.billing-cost-management-mcp-server@latest"],
-            env={"AWS_REGION": GUARDRAILS["allowed_regions"][0]})))
+            env={"AWS_REGION": "us-east-1"})))
         cost_mcp.start()
         tools.extend(cost_mcp.list_tools_sync())
         print("[MCP]  Cost Management MCP connected")
@@ -735,7 +735,7 @@ def create_agent(permissions: dict):
         print("[MCP] Connecting AWS Pricing MCP server...")
         pricing_mcp = MCPClient(lambda: stdio_client(StdioServerParameters(
             command="uvx", args=["awslabs.aws-pricing-mcp-server@latest"],
-            env={"AWS_REGION": GUARDRAILS["allowed_regions"][0]})))
+            env={"AWS_REGION": "us-east-1"})))
         pricing_mcp.start()
         tools.extend(pricing_mcp.list_tools_sync())
         print("[MCP]  Pricing MCP connected")

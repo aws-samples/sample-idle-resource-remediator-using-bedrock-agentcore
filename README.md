@@ -113,7 +113,7 @@ Edit `GUARDRAILS` in `src/agent.py`:
 
 ```python
 GUARDRAILS = {
-    "allowed_regions": "all",  # "all" discovers via ec2 describe-regions, or pass a list
+    "allowed_regions": IMPORTANT_REGIONS,  # curated important regions by default; set to "all" to discover every enabled region, or pass your own list
     "excluded_regions": ["us-gov-west-1", "us-gov-east-1", "cn-north-1", "cn-northwest-1"],
     "max_actions_per_request": 5,
     "require_snapshot_before_delete": True,
@@ -123,6 +123,21 @@ GUARDRAILS = {
     },
 }
 ```
+
+### Region scope
+
+By default the agent scans a curated list of **important commercial regions**
+(`IMPORTANT_REGIONS` in `src/agent.py` and `src/mcp_server.py`), not every enabled region.
+
+Precedence (highest first):
+1. **A region named in the prompt** (e.g. "scan us-east-1") scans ONLY that region.
+2. **`SCAN_REGIONS`** env var — a comma-separated list, or `all` to discover every enabled region.
+3. **Default** — the curated `IMPORTANT_REGIONS` list.
+
+**Non-commercial partitions are never scanned on any path** — GovCloud (`us-gov-*`),
+China (`cn-*`), and ISO (`us-iso*`, `eu-isoe*`) are always excluded, even if named
+explicitly in the prompt or `SCAN_REGIONS`. Edit `IMPORTANT_REGIONS` to match where your
+workloads actually run.
 
 ### Changing the Model
 
@@ -167,7 +182,7 @@ $ python3 src/agent.py
 [AUTH] ec2:DescribeInstances  allowed
 [AUTH] cloudwatch:GetMetricStatistics  allowed
 [AUTH] compute-optimizer:GetIdleRecommendations  allowed
-[REGIONS] Scanning 16 regions
+[REGIONS] Scanning 10 region(s): ap-northeast-1, ap-south-1, ap-southeast-1, ap-southeast-2, eu-central-1, eu-west-1, eu-west-2, us-east-1, us-east-2, us-west-2
 
 You are successfully Authenticated: jane.doe
   Role: CostOpsRole
@@ -289,7 +304,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 |---|---|---|
 | `AWS_PROFILE` | AWS credentials profile | default |
 | `AWS_REGION` | Default region for API calls | us-east-1 |
-| `SCAN_REGIONS` | Comma-separated regions to scan | all enabled regions |
+| `SCAN_REGIONS` | Comma-separated regions to scan, or `all`; non-commercial partitions (GovCloud/China/ISO) always excluded | curated important regions |
 
 ## Limitations
 

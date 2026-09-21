@@ -11,10 +11,42 @@ from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
 from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
+import os
 
 logger = logging.getLogger(__name__)
 
+# Silence the vended MCP server subprocesses' stderr (FastMCP debug logs, deprecation
+# warnings, and exception tracebacks) for clean demo output. Genuine tool errors still
+# surface to the agent as tool results. Set _MCP_ERRLOG = sys.stderr to debug the MCP servers.
+_MCP_ERRLOG = open(os.devnull, "w")
+
 # I am defining Guardrails for this agent, need more coding to notify the required channel, allowed region needs to be added based on usecase
+
+# Default "important" regions scanned when no explicit region is requested.
+# Edit this list to match where your workloads actually run.
+IMPORTANT_REGIONS = [
+    "us-east-1", "us-east-2", "us-west-2",
+    "eu-west-1", "eu-west-2", "eu-central-1",
+    "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ap-south-1",
+]
+
+# Non-commercial partitions (GovCloud, China, ISO/ISO-B/ISO-E/ISO-F) are never scanned, on any path.
+NON_COMMERCIAL_REGION_PREFIXES = ("us-gov-", "cn-", "us-iso", "eu-isoe")
+
+def _is_non_commercial(region_name: str) -> bool:
+    return region_name.startswith(NON_COMMERCIAL_REGION_PREFIXES)
+
+# Compute Optimizer's EC2 idle definition (verified against AWS docs):
+# peak CPUUtilization < 5% AND network I/O (NetworkIn + NetworkOut) < 5 MB/day over the lookback window.
+EC2_IDLE_PEAK_CPU_PERCENT = 5.0
+EC2_IDLE_NETWORK_BYTES_PER_DAY = 5 * 1024 * 1024  # 5 MB/day
+
+def _is_ec2_idle(peak_cpu_percent: float, network_bytes_total: float, days: int) -> bool:
+    """Return True if an instance meets Compute Optimizer's idle criteria over the lookback window."""
+    if days <= 0:
+        return False
+    return (peak_cpu_percent < EC2_IDLE_PEAK_CPU_PERCENT
+            and network_bytes_total < EC2_IDLE_NETWORK_BYTES_PER_DAY * days)
 
 GUARDRAILS = {
     "required_tags_for_action": ["Environment", "Name"],
@@ -22,7 +54,7 @@ GUARDRAILS = {
     "require_snapshot_before_delete": True,
     "require_reason": True,
     "min_reason_length": 10,
-    "allowed_regions": "all",  # "all" = discover via ec2 describe-regions, or provide a list to restrict
+    "allowed_regions": IMPORTANT_REGIONS,  # default: important regions only. Set to "all" to discover every enabled region, or provide your own list.
     "excluded_regions": ["us-gov-west-1", "us-gov-east-1", "cn-north-1", "cn-northwest-1"],
     "notify_channel": "#cloudops-actions",
     "bedrock_guardrail": {
@@ -74,21 +106,39 @@ def get_caller_identity() -> dict:
     return {"arn": identity["Arn"], "account": identity["Account"], "user_id": identity["UserId"]}
 
 
-def get_active_regions() -> list:
-    """Resolve which regions to scan based on GUARDRAILS config."""
-    config = GUARDRAILS["allowed_regions"]
+def get_active_regions(region: str = None) -> list:
+    """Resolve which regions to scan.
+
+    Precedence:
+      1. If `region` is provided (operator named a region in the prompt), scan ONLY that region.
+      2. Otherwise use GUARDRAILS["allowed_regions"] — a curated list of important regions by
+         default, or "all" to discover every enabled region.
+    Excluded regions are always removed.
+    """
     excluded = GUARDRAILS.get("excluded_regions", [])
 
+    # 1. Explicit per-request region from the prompt wins.
+    if region:
+        region = region.strip()
+        if region in excluded or _is_non_commercial(region):
+            print(f"[REGIONS] Requested region '{region}' is excluded (guardrail or non-commercial partition); nothing to scan.")
+            return []
+        print(f"[REGIONS] Scanning ONLY requested region: {region}")
+        return [region]
+
+    # 2. Fall back to the configured default.
+    config = GUARDRAILS["allowed_regions"]
     if isinstance(config, list):
         # Explicit list provided, use as-is minus exclusions
-        regions = [r for r in config if r not in excluded]
+        regions = [r for r in config if r not in excluded and not _is_non_commercial(r)]
     else:
         # "all" — discover enabled regions dynamically
         ec2 = boto3.client("ec2", region_name="us-east-1")
         response = ec2.describe_regions(AllRegions=False)
-        regions = [r["RegionName"] for r in response["Regions"] if r["RegionName"] not in excluded]
+        regions = [r["RegionName"] for r in response["Regions"]
+                   if r["RegionName"] not in excluded and not _is_non_commercial(r["RegionName"])]
 
-    print(f"[REGIONS] Scanning {len(regions)} regions: {', '.join(sorted(regions))}")
+    print(f"[REGIONS] Scanning {len(regions)} region(s): {', '.join(sorted(regions))}")
     return regions
 
 # Check permissions using SimulatePrincipalPolicy (proper IAM evaluation)
@@ -163,7 +213,7 @@ def resolve_permissions(arn: str) -> dict:
     # Mapping user allowed actions in IAM Policy to the tools actions
     allowed_tools = set()
     if "cloudwatch:GetMetricStatistics" in allowed_actions:
-        allowed_tools.update(["get_usage_pattern", "find_unattached_ebs_volumes", "find_unassociated_eips"])
+        allowed_tools.update(["get_usage_pattern", "find_unattached_ebs_volumes", "find_unassociated_eips", "find_idle_ec2_instances"])
     if "ce:GetCostAndUsage" in allowed_actions:
         allowed_tools.update(["get_idle_resources", "get_savings_report"])
     if "ec2:StopInstances" in allowed_actions:
@@ -264,10 +314,16 @@ def check_resource_safety(resource_id: str, resource_type: str, region: str) -> 
 # The model decides which tool to call based on the user's request.
 
 @tool
-def get_idle_resources(account_id: str) -> dict:
-    """Get idle resource recommendations from Compute Optimizer. Paginates for large accounts. Enriches with tags/name."""
+def get_idle_resources(account_id: str, region: str = None) -> dict:
+    """Get idle resource recommendations from Compute Optimizer. Paginates for large accounts. Enriches with tags/name.
+
+    Args:
+        account_id: AWS account ID to scan.
+        region: Optional. If the user names a single region (e.g. "us-east-1"), pass it here to scan ONLY that region.
+                If omitted, scans the curated important regions in GUARDRAILS["allowed_regions"].
+    """
     results = []
-    for r in get_active_regions():
+    for r in get_active_regions(region):
         print(f"[IDLE] Scanning Compute Optimizer in {r} for account {account_id}...")
         try:
             co = boto3.client("compute-optimizer", region_name=r)
@@ -483,7 +539,7 @@ def batch_execute(action: str, resource_ids: list, region: str, reason: str, bat
 @tool
 def get_usage_pattern(resource_id: str, resource_type: str, region: str, days: int = 60) -> dict:
     """Analyse CloudWatch metrics to determine if truly idle, periodic, or sporadic. Default 60 days (CloudWatch max at hourly resolution).
-    Supported resource_type values: ec2, ebs, rds, elb.
+    Supported resource_type values: ec2, ebs, rds, elb (Classic), alb (Application), nlb (Network).
     For EBS volumes, checks VolumeReadOps. For EC2, checks CPUUtilization."""
     print(f"[PATTERN] Analysing {resource_type} {resource_id} in {region} ({days} days)...")
     cw = boto3.client("cloudwatch", region_name=region)
@@ -492,6 +548,8 @@ def get_usage_pattern(resource_id: str, resource_type: str, region: str, days: i
         "ebs": {"namespace": "AWS/EBS", "metric": "VolumeReadOps", "dimension": "VolumeId"},
         "rds": {"namespace": "AWS/RDS", "metric": "DatabaseConnections", "dimension": "DBInstanceIdentifier"},
         "elb": {"namespace": "AWS/ELB", "metric": "RequestCount", "dimension": "LoadBalancerName"},
+        "alb": {"namespace": "AWS/ApplicationELB", "metric": "RequestCount", "dimension": "LoadBalancer"},
+        "nlb": {"namespace": "AWS/NetworkELB", "metric": "NewFlowCount", "dimension": "LoadBalancer"},
     }
     if resource_type not in metric_map:
         return {"error": f"Unsupported: {resource_type}"}
@@ -530,10 +588,17 @@ def get_usage_pattern(resource_id: str, resource_type: str, region: str, days: i
 
 
 @tool
-def find_unattached_ebs_volumes(account_id: str) -> list:
-    """Find EBS volumes not attached to any instance. Scans all regions automatically."""
+def find_unattached_ebs_volumes(account_id: str, region: str = None) -> list:
+    """Find EBS volumes not attached to any instance.
+
+    Args:
+        account_id: AWS account ID.
+        region: Optional. If the user names a single region (e.g. "us-east-1"), pass it to scan ONLY that region.
+                If omitted, scans the curated important regions in GUARDRAILS["allowed_regions"].
+    """
     volumes = []
-    for r in get_active_regions():
+    scan_regions = get_active_regions(region)
+    for r in scan_regions:
         print(f"[EBS] Scanning in {r} for account {account_id}...")
         ec2 = boto3.client("ec2", region_name=r)
         response = ec2.describe_volumes(Filters=[{"Name": "status", "Values": ["available"]}])
@@ -543,23 +608,87 @@ def find_unattached_ebs_volumes(account_id: str) -> list:
                 "volume_type": vol["VolumeType"], "days_unattached": days,
                 "monthly_cost_estimate": round(vol["Size"] * 0.08, 2),
                 "tags": {t["Key"]: t["Value"] for t in vol.get("Tags", [])}})
-    print(f"[EBS] Total: {len(volumes)} unattached volumes across all regions")
+    print(f"[EBS] Total: {len(volumes)} unattached volumes across {len(scan_regions)} region(s)")
     return sorted(volumes, key=lambda x: x["monthly_cost_estimate"], reverse=True)
 
 
 @tool
-def find_unassociated_eips(account_id: str) -> list:
-    """Find Elastic IPs not associated with any instance. Scans all regions automatically."""
+def find_unassociated_eips(account_id: str, region: str = None) -> list:
+    """Find Elastic IPs not associated with any instance.
+
+    Args:
+        account_id: AWS account ID.
+        region: Optional. If the user names a single region (e.g. "us-east-1"), pass it to scan ONLY that region.
+                If omitted, scans the curated important regions in GUARDRAILS["allowed_regions"].
+    """
     eips = []
-    for r in get_active_regions():
+    scan_regions = get_active_regions(region)
+    for r in scan_regions:
         print(f"[EIP] Scanning in {r} for account {account_id}...")
         ec2 = boto3.client("ec2", region_name=r)
         for addr in ec2.describe_addresses().get("Addresses", []):
             if "AssociationId" not in addr:
                 eips.append({"allocation_id": addr["AllocationId"], "public_ip": addr["PublicIp"],
                     "region": r, "monthly_cost": 3.65, "tags": {t["Key"]: t["Value"] for t in addr.get("Tags", [])}})
-    print(f"[EIP] Total: {len(eips)} unassociated EIPs across all regions")
+    print(f"[EIP] Total: {len(eips)} unassociated EIPs across {len(scan_regions)} region(s)")
     return eips
+
+
+@tool
+def find_idle_ec2_instances(account_id: str, region: str = None, days: int = 14) -> list:
+    """Find idle EC2 instances directly, without depending on Compute Optimizer (so brand-new instances are covered).
+
+    Mirrors Compute Optimizer's idle definition: an instance is idle when peak CPUUtilization is below 5%
+    AND total network I/O (NetworkIn + NetworkOut) is under 5 MB/day over the lookback window. Metrics come
+    from the AWS/EC2 namespace (CPUUtilization Maximum; NetworkIn/NetworkOut Sum), dimension InstanceId.
+    Returned instances are idle CANDIDATES only — run check_resource_safety on each before any action
+    (e.g. Auto Scaling members return BLOCKED).
+
+    Args:
+        account_id: AWS account ID (for logging/audit; discovery uses the caller's credentials).
+        region: Optional. If the user names a single region, scan ONLY that region; otherwise the curated important regions.
+        days: CloudWatch lookback window in days (default 14, matching Compute Optimizer's idle lookback).
+    """
+    idle = []
+    scan_regions = get_active_regions(region)
+    net_threshold = EC2_IDLE_NETWORK_BYTES_PER_DAY * days
+    start = datetime.now(timezone.utc) - timedelta(days=days)
+    end = datetime.now(timezone.utc)
+    for r in scan_regions:
+        print(f"[EC2] Scanning running instances in {r} for account {account_id}...")
+        ec2 = boto3.client("ec2", region_name=r)
+        cw = boto3.client("cloudwatch", region_name=r)
+        paginator = ec2.get_paginator("describe_instances")
+        for page in paginator.paginate(Filters=[{"Name": "instance-state-name", "Values": ["running"]}]):
+            for resv in page.get("Reservations", []):
+                for inst in resv.get("Instances", []):
+                    iid = inst["InstanceId"]
+                    cpu = cw.get_metric_statistics(
+                        Namespace="AWS/EC2", MetricName="CPUUtilization",
+                        Dimensions=[{"Name": "InstanceId", "Value": iid}],
+                        StartTime=start, EndTime=end, Period=86400, Statistics=["Maximum"])
+                    peak_cpu = max((dp["Maximum"] for dp in cpu.get("Datapoints", [])), default=0.0)
+                    net_bytes = 0.0
+                    for mn in ("NetworkIn", "NetworkOut"):
+                        resp = cw.get_metric_statistics(
+                            Namespace="AWS/EC2", MetricName=mn,
+                            Dimensions=[{"Name": "InstanceId", "Value": iid}],
+                            StartTime=start, EndTime=end, Period=86400, Statistics=["Sum"])
+                        net_bytes += sum(dp["Sum"] for dp in resp.get("Datapoints", []))
+                    if _is_ec2_idle(peak_cpu, net_bytes, days):
+                        tags = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
+                        idle.append({
+                            "instance_id": iid, "region": r,
+                            "name": tags.get("Name", ""),
+                            "instance_type": inst.get("InstanceType", ""),
+                            "peak_cpu_percent": round(peak_cpu, 2),
+                            "network_io_mb": round(net_bytes / (1024 * 1024), 2),
+                            "lookback_days": days,
+                            "launch_time": str(inst.get("LaunchTime", "")),
+                            "tags": tags,
+                        })
+    print(f"[EC2] Total: {len(idle)} idle instance(s) across {len(scan_regions)} region(s)")
+    return idle
 
 
 @tool
@@ -708,6 +837,7 @@ def create_agent(permissions: dict):
     if "get_usage_pattern" in allowed: tools.append(get_usage_pattern)
     if "find_unattached_ebs_volumes" in allowed: tools.append(find_unattached_ebs_volumes)
     if "find_unassociated_eips" in allowed: tools.append(find_unassociated_eips)
+    if "find_idle_ec2_instances" in allowed: tools.append(find_idle_ec2_instances)
     if "stop_instance" in allowed: tools.append(stop_instance)
     if "stop_instance" in allowed: tools.append(batch_execute)
     if "snapshot_and_delete_volume" in allowed: tools.append(snapshot_and_delete_volume)
@@ -724,7 +854,7 @@ def create_agent(permissions: dict):
         print("[MCP] Connecting AWS Billing & Cost Management MCP server...")
         cost_mcp = MCPClient(lambda: stdio_client(StdioServerParameters(
             command="uvx", args=["awslabs.billing-cost-management-mcp-server@latest"],
-            env={"AWS_REGION": "us-east-1"})))
+            env={"AWS_REGION": "us-east-1", "FASTMCP_LOG_LEVEL": "ERROR"}), errlog=_MCP_ERRLOG))
         cost_mcp.start()
         tools.extend(cost_mcp.list_tools_sync())
         print("[MCP]  Cost Management MCP connected")
@@ -735,7 +865,7 @@ def create_agent(permissions: dict):
         print("[MCP] Connecting AWS Pricing MCP server...")
         pricing_mcp = MCPClient(lambda: stdio_client(StdioServerParameters(
             command="uvx", args=["awslabs.aws-pricing-mcp-server@latest"],
-            env={"AWS_REGION": "us-east-1"})))
+            env={"AWS_REGION": "us-east-1", "FASTMCP_LOG_LEVEL": "ERROR"}), errlog=_MCP_ERRLOG))
         pricing_mcp.start()
         tools.extend(pricing_mcp.list_tools_sync())
         print("[MCP]  Pricing MCP connected")

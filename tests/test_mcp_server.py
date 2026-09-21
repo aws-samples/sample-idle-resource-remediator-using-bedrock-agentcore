@@ -23,6 +23,57 @@ def test_excluded_regions():
     assert "cn-north-1" in EXCLUDED_REGIONS
 
 
+def test_non_commercial_partitions_never_scannable():
+    """GovCloud, China, and ISO partitions must never be scannable, on any path."""
+    from src.mcp_server import _is_scannable
+    for r in ["cn-north-1", "cn-northwest-1", "us-gov-west-1", "us-gov-east-1",
+              "us-iso-east-1", "us-isob-east-1", "us-isof-south-1", "eu-isoe-west-1"]:
+        assert _is_scannable(r) is False, r
+    for r in ["us-east-1", "eu-west-2", "ap-southeast-2"]:
+        assert _is_scannable(r) is True, r
+
+
+def test_default_scope_is_important_commercial_regions():
+    """With no region arg and no env override, default to curated commercial regions only."""
+    with patch.dict("os.environ", {}, clear=False):
+        import os
+        os.environ.pop("SCAN_REGIONS", None)
+        from src.mcp_server import _get_regions
+        regions = _get_regions()
+        assert "us-east-1" in regions
+        assert all(not r.startswith(("us-gov-", "cn-", "us-iso", "eu-isoe")) for r in regions)
+
+
+def test_named_region_scopes_to_one():
+    """A single region named in the prompt scopes to only that region."""
+    from src.mcp_server import _get_regions
+    assert _get_regions("us-east-1") == ["us-east-1"]
+
+
+def test_named_non_commercial_region_returns_empty():
+    """A China/GovCloud region named in the prompt is still refused."""
+    from src.mcp_server import _get_regions
+    assert _get_regions("cn-north-1") == []
+    assert _get_regions("us-gov-west-1") == []
+
+
+def test_ec2_idle_helper_matches_compute_optimizer_criteria():
+    """_is_ec2_idle mirrors Compute Optimizer: peak CPU < 5% AND network < 5 MB/day."""
+    from src.agent import _is_ec2_idle, EC2_IDLE_NETWORK_BYTES_PER_DAY
+    days = 14
+    mb = 1024 * 1024
+    # Idle: 0.8% peak CPU, 1 MB total network over 14 days (well under 5 MB/day)
+    assert _is_ec2_idle(0.8, 1 * mb, days) is True
+    # Not idle: high peak CPU
+    assert _is_ec2_idle(72.0, 1 * mb, days) is False
+    # Not idle: network over the 5 MB/day budget (100 MB > 70 MB threshold)
+    assert _is_ec2_idle(1.0, 100 * mb, days) is False
+    # Exactly at the daily budget is not "under" the threshold
+    assert _is_ec2_idle(1.0, EC2_IDLE_NETWORK_BYTES_PER_DAY * days, days) is False
+    # Guard: non-positive lookback never idle
+    assert _is_ec2_idle(0.0, 0.0, 0) is False
+
+
 def test_check_safety_blocked_by_asg():
     """Test that ASG members get BLOCKED verdict."""
     mock_ec2 = MagicMock()

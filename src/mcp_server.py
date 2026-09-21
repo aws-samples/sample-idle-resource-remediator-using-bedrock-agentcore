@@ -36,32 +36,71 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("idle-resource-remediator")
 
-# Region config from environment or default to all
+# Region config
 EXCLUDED_REGIONS = ["us-gov-west-1", "us-gov-east-1", "cn-north-1", "cn-northwest-1"]
 
+# Non-commercial partitions (GovCloud, China, ISO/ISO-B/ISO-E/ISO-F) are never scanned, on any path.
+NON_COMMERCIAL_REGION_PREFIXES = ("us-gov-", "cn-", "us-iso", "eu-isoe")
 
-def _get_regions() -> list:
-    """Get regions to scan — from env var or discover all."""
+# Default "important" regions scanned when no explicit region is requested.
+# Edit to match where your workloads actually run.
+IMPORTANT_REGIONS = [
+    "us-east-1", "us-east-2", "us-west-2",
+    "eu-west-1", "eu-west-2", "eu-central-1",
+    "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ap-south-1",
+]
+
+
+def _is_scannable(region_name: str) -> bool:
+    """A region is scannable only if it is commercial and not explicitly excluded."""
+    if region_name in EXCLUDED_REGIONS:
+        return False
+    if region_name.startswith(NON_COMMERCIAL_REGION_PREFIXES):
+        return False
+    return True
+
+
+def _get_regions(region: str | None = None) -> list:
+    """Resolve regions to scan.
+
+    Precedence:
+      1. `region` argument (a single region named in the prompt) — scan ONLY that region.
+      2. SCAN_REGIONS env var — comma-separated list, or "all" to discover every enabled region.
+      3. Default — the curated IMPORTANT_REGIONS list.
+    Non-commercial partitions (GovCloud, China, ISO) are always excluded, even if named explicitly.
+    """
+    # 1. Single region from the prompt wins.
+    if region:
+        region = region.strip()
+        return [region] if _is_scannable(region) else []
+
+    # 2. Environment override.
     env_regions = os.environ.get("SCAN_REGIONS")
     if env_regions:
-        return [r.strip() for r in env_regions.split(",")]
-    ec2 = boto3.client("ec2", region_name="us-east-1")
-    response = ec2.describe_regions(AllRegionsOpt=False)
-    return [r["RegionName"] for r in response["Regions"] if r["RegionName"] not in EXCLUDED_REGIONS]
+        if env_regions.strip().lower() == "all":
+            ec2 = boto3.client("ec2", region_name="us-east-1")
+            response = ec2.describe_regions(AllRegions=False)
+            return [r["RegionName"] for r in response["Regions"] if _is_scannable(r["RegionName"])]
+        return [r.strip() for r in env_regions.split(",") if _is_scannable(r.strip())]
+
+    # 3. Default to important regions.
+    return [r for r in IMPORTANT_REGIONS if _is_scannable(r)]
 
 
 @mcp.tool()
-def get_idle_resources(account_id: str, regions: list[str] | None = None) -> dict:
+def get_idle_resources(account_id: str, region: str | None = None, regions: list[str] | None = None) -> dict:
     """Scan Compute Optimizer for idle resource recommendations.
 
     Args:
         account_id: AWS account ID to scan
-        regions: Optional list of regions. If not provided, scans all enabled regions.
+        region: Optional single region. If the user names ONE region in the prompt, pass it here to scan only that region.
+        regions: Optional explicit list of regions.
+        If neither region nor regions is given, scans the curated important regions (IMPORTANT_REGIONS / SCAN_REGIONS).
 
     Returns:
         List of idle resources with resource ID, type, region, name, and estimated monthly savings.
     """
-    scan_regions = regions or _get_regions()
+    scan_regions = regions or _get_regions(region)
     results = []
 
     for region in scan_regions:
@@ -120,9 +159,8 @@ def get_usage_pattern(resource_id: str, region: str, days: int = 60) -> dict:
 
     if resource_id.startswith("i-"):
         metrics = {}
-        for metric_name, stat in [("CPUUtilization", "Maximum"), ("NetworkPacketsIn", "Sum"),
-                                   ("NetworkPacketsOut", "Sum"), ("DiskReadOps", "Sum"),
-                                   ("EBSReadOps", "Sum"), ("EBSWriteOps", "Sum")]:
+        for metric_name, stat in [("CPUUtilization", "Maximum"), ("NetworkIn", "Sum"),
+                                   ("NetworkOut", "Sum"), ("EBSReadOps", "Sum"), ("EBSWriteOps", "Sum")]:
             resp = cw.get_metric_statistics(
                 Namespace="AWS/EC2", MetricName=metric_name,
                 Dimensions=[{"Name": "InstanceId", "Value": resource_id}],
@@ -134,7 +172,9 @@ def get_usage_pattern(resource_id: str, region: str, days: int = 60) -> dict:
             else:
                 metrics[metric_name] = sum(dp[stat] for dp in datapoints)
 
-        idle = metrics["CPUUtilization"] < 5 and metrics["NetworkPacketsIn"] == 0
+        # Compute Optimizer idle criteria: peak CPU < 5% AND network I/O < 5 MB/day.
+        network_bytes = metrics["NetworkIn"] + metrics["NetworkOut"]
+        idle = metrics["CPUUtilization"] < 5 and network_bytes < (5 * 1024 * 1024 * days)
         return {"resource_id": resource_id, "region": region, "days": days, "metrics": metrics, "is_idle": idle}
 
     elif resource_id.startswith("vol-"):
